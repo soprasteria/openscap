@@ -12,6 +12,7 @@
 #include <debug_priv.h>
 #include <sexp-manip.h>
 #include <list.h>
+#include <oscap_string.h>
 
 // probe include
 #include "auditdline_probe.h"
@@ -22,7 +23,30 @@ int list_requested, interpret;
 const char key_sep[2];
 extern int _audit_elf;
 
+struct audit_line *audit_line_new()
+{
+	struct audit_line *audit_line = malloc(sizeof(struct audit_line));
+	audit_line->audit_line = oscap_string_new();
+	audit_line->filter_key = oscap_stringlist_new();
+	return audit_line;
+}
 
+void auditd_line_free(struct audit_line *audit_line)
+{
+	oscap_string_free(audit_line->audit_line);
+	oscap_stringlist_free(audit_line->filter_key);
+	free(audit_line);
+}
+
+void audit_line_push(struct audit_line *audit_line, const char *audit_line_part)
+{
+	oscap_string_append_string(audit_line->audit_line, audit_line_part);
+}
+
+bool audit_line_add_filter_key(struct audit_line *audit_line, const char *filter_key)
+{
+	return oscap_stringlist_add_string(audit_line->filter_key, filter_key);
+}
 
 // The following code is a modified version of auditctl's code
 
@@ -259,18 +283,28 @@ static int print_arch(unsigned int value, int op)
 /*
  *  This function prints 1 rule from the kernel reply
  */
-static void print_rule(const struct audit_rule_data *r)
+struct audit_line *get_rule(const struct audit_rule_data *r)
 {
 	unsigned int i, count = 0, sc = 0;
 	size_t boffset = 0;
 	int mach = -1, watch = is_watch(r);
 	unsigned long long a0 = 0, a1 = 0;
+	struct audit_line *audit_line = audit_line_new();
 
 	if (!watch)
 	{ /* This is syscall auditing */
-		printf("-a %s,%s",
-			   audit_action_to_name((int)r->action),
-			   audit_flag_to_name(r->flags));
+		size_t buf_len = 0;
+		buf_len = snprintf(NULL, 0, "-a %s,%s",
+						   audit_action_to_name((int)r->action),
+						   audit_flag_to_name(r->flags));
+
+		char *syscall_audit = malloc(buf_len + 1);
+		snprintf(syscall_audit, buf_len + 1, "-a %s,%s",
+				 audit_action_to_name((int)r->action),
+				 audit_flag_to_name(r->flags));
+
+		audit_line_push(audit_line, syscall_audit);
+		free(syscall_audit);
 
 		// Now find the arch and print it
 		for (i = 0; i < r->field_count; i++)
@@ -292,6 +326,7 @@ static void print_rule(const struct audit_rule_data *r)
 		const char *name;
 		int op = r->fieldflags[i] & AUDIT_OPERATORS;
 		int field = r->fields[i] & ~AUDIT_OPERATORS;
+		size_t field_value_len = 0;
 
 		if (field == AUDIT_ARCH)
 			continue; // already printed
@@ -304,49 +339,105 @@ static void print_rule(const struct audit_rule_data *r)
 			if (field == AUDIT_MSGTYPE)
 			{
 				if (!audit_msg_type_to_name(r->values[i]))
-					printf(" -F %s%s%d", name,
-						   audit_operator_to_symbol(op),
-						   r->values[i]);
+				{
+					field_value_len = snprintf(NULL, 0, " -F %s%s%d", name,
+											   audit_operator_to_symbol(op),
+											   r->values[i]);
+					char *audit_msg_buf = malloc(field_value_len + 1);
+					snprintf(audit_msg_buf, field_value_len + 1, " -F %s%s%d", name,
+							 audit_operator_to_symbol(op),
+							 r->values[i]);
+					audit_line_push(audit_line, audit_msg_buf);
+					free(audit_msg_buf);
+				}
 				else
-					printf(" -F %s%s%s", name,
-						   audit_operator_to_symbol(op),
-						   audit_msg_type_to_name(
-							   r->values[i]));
+				{
+					field_value_len = snprintf(NULL, 0, " -F %s%s%s", name,
+											   audit_operator_to_symbol(op),
+											   audit_msg_type_to_name(
+												   r->values[i]));
+					char *audit_msg_buf = malloc(field_value_len + 1);
+					snprintf(audit_msg_buf, field_value_len + 1, " -F %s%s%s", name,
+							 audit_operator_to_symbol(op),
+							 audit_msg_type_to_name(
+								 r->values[i]));
+					audit_line_push(audit_line, audit_msg_buf);
+					free(audit_msg_buf);
+				}
 			}
 			else if ((field >= AUDIT_SUBJ_USER &&
 					  field <= AUDIT_OBJ_LEV_HIGH) &&
 					 field != AUDIT_PPID)
 			{
-				printf(" -F %s%s%.*s", name,
-					   audit_operator_to_symbol(op),
-					   r->values[i], &r->buf[boffset]);
+				field_value_len = snprintf(NULL, 0, " -F %s%s%.*s", name,
+										   audit_operator_to_symbol(op),
+										   r->values[i], &r->buf[boffset]);
+				char *audit_field = malloc(field_value_len + 1);
+				snprintf(audit_field, field_value_len + 1, " -F %s%s%.*s", name,
+						 audit_operator_to_symbol(op),
+						 r->values[i], &r->buf[boffset]);
+				audit_line_push(audit_line, audit_field);
+				free(audit_field);
 				boffset += r->values[i];
 			}
 			else if (field == AUDIT_WATCH)
 			{
 				if (watch)
-					printf("-w %.*s", r->values[i],
-						   &r->buf[boffset]);
+				{
+					field_value_len = snprintf(NULL, 0, "-w %.*s", r->values[i],
+											   &r->buf[boffset]);
+					char *audit_field = malloc(field_value_len + 1);
+					snprintf(audit_field, field_value_len + 1, "-w %.*s", r->values[i],
+							 &r->buf[boffset]);
+					audit_line_push(audit_line, audit_field);
+					free(audit_field);
+				}
 				else
-					printf(" -F path=%.*s", r->values[i],
-						   &r->buf[boffset]);
+				{
+					field_value_len = snprintf(NULL, 0, " -F path=%.*s", r->values[i],
+											   &r->buf[boffset]);
+					char *audit_field = malloc(field_value_len + 1);
+					snprintf(audit_field, field_value_len + 1, " -F path=%.*s", r->values[i],
+							 &r->buf[boffset]);
+					audit_line_push(audit_line, audit_field);
+					free(audit_field);
+				}
 				boffset += r->values[i];
 			}
 			else if (field == AUDIT_DIR)
 			{
 				if (watch)
-					printf("-w %.*s", r->values[i],
-						   &r->buf[boffset]);
+				{
+					field_value_len = snprintf(NULL, 0, "-w %.*s", r->values[i],
+											   &r->buf[boffset]);
+					char *audit_field = malloc(field_value_len + 1);
+					snprintf(audit_field, field_value_len + 1, "-w %.*s", r->values[i],
+							 &r->buf[boffset]);
+					audit_line_push(audit_line, audit_field);
+					free(audit_field);
+				}
 				else
-					printf(" -F dir=%.*s", r->values[i],
-						   &r->buf[boffset]);
+				{
+					field_value_len = snprintf(NULL, 0, " -F dir=%.*s", r->values[i],
+											   &r->buf[boffset]);
+					char *audit_field = malloc(field_value_len + 1);
+					snprintf(audit_field, field_value_len + 1, " -F dir=%.*s", r->values[i],
+							 &r->buf[boffset]);
+					audit_line_push(audit_line, audit_field);
+					free(audit_field);
+				}
 
 				boffset += r->values[i];
 			}
 			else if (field == AUDIT_EXE)
 			{
-				printf(" -F exe=%.*s",
-					   r->values[i], &r->buf[boffset]);
+				field_value_len = snprintf(NULL, 0, " -F exe=%.*s",
+										   r->values[i], &r->buf[boffset]);
+				char *audit_field = malloc(field_value_len + 1);
+				snprintf(audit_field, field_value_len + 1, " -F exe=%.*s",
+						 r->values[i], &r->buf[boffset]);
+				audit_line_push(audit_line, audit_field);
+				free(audit_field);
 				boffset += r->values[i];
 			}
 			else if (field == AUDIT_FILTERKEY)
@@ -360,9 +451,23 @@ static void print_rule(const struct audit_rule_data *r)
 				while (ptr)
 				{
 					if (watch)
-						printf(" -k %s", ptr);
+					{
+						field_value_len = snprintf(NULL, 0, " -k %s", ptr);
+						char *audit_field = malloc(field_value_len + 1);
+						snprintf(audit_field, field_value_len + 1, " -k %s", ptr);
+						audit_line_push(audit_line, audit_field);
+						audit_line_add_filter_key(audit_line, ptr);
+						free(audit_field);
+					}
 					else
-						printf(" -F key=%s", ptr);
+					{
+						field_value_len = snprintf(NULL, 0, " -F key=%s", ptr);
+						char *audit_field = malloc(field_value_len + 1);
+						snprintf(audit_field, field_value_len + 1, " -F key=%s", ptr);
+						audit_line_push(audit_line, audit_field);
+						audit_line_add_filter_key(audit_line, ptr);
+						free(audit_field);
+					}
 					ptr = strtok_r(NULL, key_sep, &saved);
 				}
 				free(rkey);
@@ -381,16 +486,34 @@ static void print_rule(const struct audit_rule_data *r)
 				if (val & AUDIT_PERM_ATTR)
 					strcat(perms, "a");
 				if (watch)
-					printf(" -p %s", perms);
+				{
+					field_value_len = snprintf(NULL, 0, " -p %s", perms);
+					char *audit_field = malloc(field_value_len + 1);
+					snprintf(audit_field, field_value_len + 1, " -p %s", perms);
+					audit_line_push(audit_line, audit_field);
+					free(audit_field);
+				}
 				else
-					printf(" -F perm=%s", perms);
+				{
+					field_value_len = snprintf(NULL, 0, " -F perm=%s", perms);
+					char *audit_field = malloc(field_value_len + 1);
+					snprintf(audit_field, field_value_len + 1, " -F perm=%s", perms);
+					audit_line_push(audit_line, audit_field);
+					free(audit_field);
+				}
 			}
 			else if (field == AUDIT_INODE)
 			{
 				// This is unsigned
-				printf(" -F %s%s%u", name,
-					   audit_operator_to_symbol(op),
-					   r->values[i]);
+				field_value_len = snprintf(NULL, 0, " -F %s%s%u", name,
+										   audit_operator_to_symbol(op),
+										   r->values[i]);
+				char *audit_field = malloc(field_value_len + 1);
+				snprintf(audit_field, field_value_len + 1, " -F %s%s%u", name,
+						 audit_operator_to_symbol(op),
+						 r->values[i]);
+				audit_line_push(audit_line, audit_field);
+				free(audit_field);
 			}
 			else if (field == AUDIT_FIELD_COMPARE)
 			{
@@ -437,45 +560,89 @@ static void print_rule(const struct audit_rule_data *r)
 			{
 				int e = abs((int)r->values[i]);
 				const char *err = audit_errno_to_name(e);
-
 				if (((int)r->values[i] < 0) && err)
-					printf(" -F %s%s-%s", name,
-						   audit_operator_to_symbol(op),
-						   err);
+				{
+					field_value_len = snprintf(NULL, 0, " -F %s%s-%s", name,
+											   audit_operator_to_symbol(op),
+											   err);
+					char *audit_field = malloc(field_value_len + 1);
+					snprintf(audit_field, field_value_len + 1, " -F %s%s-%s", name,
+							 audit_operator_to_symbol(op),
+							 err);
+					audit_line_push(audit_line, audit_field);
+					free(audit_field);
+				}
 				else
-					printf(" -F %s%s%d", name,
-						   audit_operator_to_symbol(op),
-						   (int)r->values[i]);
+				{
+					field_value_len = snprintf(NULL, 0, " -F %s%s%d", name,
+											   audit_operator_to_symbol(op),
+											   (int)r->values[i]);
+					char *audit_field = malloc(field_value_len + 1);
+					snprintf(audit_field, field_value_len + 1, " -F %s%s%d", name,
+							 audit_operator_to_symbol(op),
+							 (int)r->values[i]);
+					audit_line_push(audit_line, audit_field);
+					free(audit_field);
+				}
 			}
 			else if (field == AUDIT_FSTYPE)
 			{
 				if (!audit_fstype_to_name(r->values[i]))
-					printf(" -F %s%s%d", name,
-						   audit_operator_to_symbol(op),
-						   r->values[i]);
+				{
+					field_value_len = snprintf(NULL, 0, " -F %s%s%d", name,
+											   audit_operator_to_symbol(op),
+											   r->values[i]);
+					char *audit_field = malloc(field_value_len + 1);
+					snprintf(audit_field, field_value_len + 1, " -F %s%s%d", name,
+							 audit_operator_to_symbol(op),
+							 r->values[i]);
+					audit_line_push(audit_line, audit_field);
+					free(audit_field);
+				}
 				else
-					printf(" -F %s%s%s", name,
-						   audit_operator_to_symbol(op),
-						   audit_fstype_to_name(
-							   r->values[i]));
+				{
+					field_value_len = snprintf(NULL, 0, " -F %s%s%s", name,
+											   audit_operator_to_symbol(op),
+											   audit_fstype_to_name(
+												   r->values[i]));
+					char *audit_field = malloc(field_value_len + 1);
+					snprintf(audit_field, field_value_len + 1, " -F %s%s%s", name,
+							 audit_operator_to_symbol(op),
+							 audit_fstype_to_name(
+								 r->values[i]));
+					audit_line_push(audit_line, audit_field);
+					free(audit_field);
+				}
 			}
 			else
 			{
 				// The default is signed decimal
-				printf(" -F %s%s%d", name,
-					   audit_operator_to_symbol(op),
-					   r->values[i]);
+				field_value_len = snprintf(NULL, 0, " -F %s%s%d", name,
+										   audit_operator_to_symbol(op),
+										   r->values[i]);
+				char *audit_field = malloc(field_value_len + 1);
+				snprintf(audit_field, field_value_len + 1, " -F %s%s%d", name,
+						 audit_operator_to_symbol(op),
+						 r->values[i]);
+				audit_line_push(audit_line, audit_field);
+				free(audit_field);
 			}
 		}
 		else
 		{
 			// The field name is unknown
-			printf(" f%d%s%d", r->fields[i],
-				   audit_operator_to_symbol(op),
-				   r->values[i]);
+			field_value_len = snprintf(NULL, 0, " f%d%s%d", r->fields[i],
+									   audit_operator_to_symbol(op),
+									   r->values[i]);
+			char *audit_field = malloc(field_value_len + 1);
+			snprintf(audit_field, field_value_len + 1, " f%d%s%d", r->fields[i],
+					 audit_operator_to_symbol(op),
+					 r->values[i]);
+			audit_line_push(audit_line, audit_field);
+			free(audit_field);
 		}
 	}
-	printf("\n");
+	return audit_line;
 }
 
 /*
@@ -484,6 +651,7 @@ static void print_rule(const struct audit_rule_data *r)
 static void get_reply(int fd)
 {
 	int i, retval;
+	int line_number = 1;
 	int timeout = 40; /* loop has delay of .1 - so this is 4 seconds */
 	struct audit_reply rep;
 	fd_set read_mask;
@@ -508,12 +676,22 @@ static void get_reply(int fd)
 			{
 				i = 0;	  /* reset timeout */
 				continue; /* This was an ack */
-			} else if (rep.type == NLMSG_DONE) {
+			}
+			else if (rep.type == NLMSG_DONE)
+			{
 				break;
 			}
-			// TODO gestion des types de messages n'étant pas des rules
-			print_rule(rep.ruledata);
-			dD("Test lol");
+			// TODO gestion des types de messages n'�tant pas des rules
+			struct audit_line *audit_line = get_rule(rep.ruledata);
+			audit_line->line_number = line_number;
+			dD("Auditd line : %s", oscap_string_get_cstr(audit_line->audit_line));
+			struct oscap_string_iterator *filter_key_iterator = oscap_stringlist_get_strings(audit_line->filter_key);
+			while (oscap_string_iterator_has_more(filter_key_iterator))
+			{
+				dD("Audit line filter_key : %s", oscap_string_iterator_next(filter_key_iterator));
+			}
+			dD("Aduit line line_number : %d", audit_line->line_number);
+			line_number++;
 		}
 	}
 }
@@ -535,8 +713,6 @@ static struct oscap_list *get_all_audit_rules(probe_ctx *ctx)
 		{
 
 			dD("Successfull request to get the kernel audit rules.");
-
-			struct audit_reply audit_rep;
 
 			get_reply(audit_fd);
 
