@@ -936,7 +936,9 @@ int auditdline_probe_main(probe_ctx *ctx, void *arg)
 
 	SEXP_t *probe_in = probe_ctx_getobject(ctx);
 	SEXP_t *key_filter = probe_obj_getent(probe_in, "filter_key", 1);
-	bool isNil = probe_ent_getval(key_filter) == NULL;
+	SEXP_t *nil_attr = probe_ent_getval(key_filter);
+	bool isNil = nil_attr == NULL;
+	free(nil_attr);
 
 	struct oscap_list *audit_list = get_all_audit_rules(ctx);
 
