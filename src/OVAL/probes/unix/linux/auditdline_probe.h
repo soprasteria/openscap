@@ -19,7 +19,7 @@ struct audit_line
  * Constructor method for an audit_line struct
  * This method alloc an oscap_string and an oscap_stringlist 
  */
-struct audit_line *audit_line_new();
+struct audit_line *audit_line_new(void);
 
 /**
  * Destructor method for an audit_line struct
@@ -40,6 +40,11 @@ void audit_line_push(struct audit_line *audit_line, const char *audit_line_part)
  * @param filter_key filter_key element to add to the filter_key field of the struct
  */
 bool audit_line_add_filter_key(struct audit_line *audit_line, const char *filter_key);
+
+/**
+ *  This function prints 1 rule from the kernel reply
+ */
+struct audit_line *get_rule(const struct audit_rule_data *r);
 
 int auditdline_probe_offline_mode_supported(void);
 int auditdline_probe_main(probe_ctx *ctx, void *arg);
