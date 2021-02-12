@@ -13,6 +13,7 @@
 #include <sexp-manip.h>
 #include <list.h>
 #include <oscap_string.h>
+#include "../OVAL/probes/probe/entcmp.h"
 
 // probe include
 #include "auditdline_probe.h"
@@ -20,7 +21,7 @@
 /* Global vars */
 extern char key[AUDIT_MAX_KEY_LEN + 1];
 int list_requested, interpret;
-const char key_sep[2];
+const char key_sep[2] = {AUDIT_KEY_SEPARATOR, 0};
 extern int _audit_elf;
 
 struct audit_line *audit_line_new()
@@ -697,14 +698,15 @@ struct audit_line *get_rule(const struct audit_rule_data *r)
 			{
 				print_field_cmp(r->values[i], op, audit_line);
 			}
-			else if (field >= AUDIT_ARG0 && field <= AUDIT_ARG3)
+			// This section is based on internal libaudit and auparse component
+			/* else if (field >= AUDIT_ARG0 && field <= AUDIT_ARG3)
 			{
 				if (field == AUDIT_ARG0)
 					a0 = r->values[i];
 				else if (field == AUDIT_ARG1)
 					a1 = r->values[i];
 
-				/* / Show these as hex
+				// Show these as hex
 				if (count > 1 || interpret == 0)
 					printf(" -F %s%s0x%X", name, 
 						audit_operator_to_symbol(op),
@@ -732,8 +734,8 @@ struct audit_line *get_rule(const struct audit_rule_data *r)
 						audit_operator_to_symbol(op),
 								out);
 					free((void *)out);
-				} */
-			}
+				}
+			} */
 			else if (field == AUDIT_EXIT)
 			{
 				int e = abs((int)r->values[i]);
@@ -826,8 +828,9 @@ struct audit_line *get_rule(const struct audit_rule_data *r)
 /*
  * A reply from the kernel is expected. Get and display it.
  */
-static void get_reply(int fd)
+static struct oscap_list *get_reply(int fd)
 {
+	struct oscap_list *audit_list = oscap_list_new();
 	int i, retval;
 	int line_number = 1;
 	int timeout = 40; /* loop has delay of .1 - so this is 4 seconds */
@@ -862,24 +865,17 @@ static void get_reply(int fd)
 			// TODO gestion des types de messages n'�tant pas des rules
 			struct audit_line *audit_line = get_rule(rep.ruledata);
 			audit_line->line_number = line_number;
-			dD("Auditd line : %s", oscap_string_get_cstr(audit_line->audit_line));
-			struct oscap_string_iterator *filter_key_iterator = oscap_stringlist_get_strings(audit_line->filter_key);
-			while (oscap_string_iterator_has_more(filter_key_iterator))
-			{
-				dD("Audit line filter_key : %s", oscap_string_iterator_next(filter_key_iterator));
-			}
-			dD("Aduit line line_number : %d", audit_line->line_number);
+			oscap_list_add(audit_list, audit_line);
 			line_number++;
 		}
 	}
+	return audit_list;
 }
 
 // End of the modified code
 
 static struct oscap_list *get_all_audit_rules(probe_ctx *ctx)
 {
-
-	struct oscap_list *audit_list = oscap_list_new();
 
 	int audit_fd = audit_open();
 
@@ -892,29 +888,9 @@ static struct oscap_list *get_all_audit_rules(probe_ctx *ctx)
 
 			dD("Successfull request to get the kernel audit rules.");
 
-			get_reply(audit_fd);
-
-			dD("Test lol 2");
-
+			struct oscap_list *audit_list = get_reply(audit_fd);
 			audit_close(audit_fd);
-
-			// if (retval > 0)
-			// {
-			// 	if (audit_rep.type == AUDIT_LIST_RULES)
-			// 	{
-			// 		dD("Succesfully getting the kernel audit rules");
-			// 	}
-			// 	else
-			// 	{
-			// 		dD("Message obtebu %d", audit_rep.type);
-			// 	};
-			// } else {
-			// 	if (retval == 0) {
-			// 		dE("The kernel respond for the audit rule request with an error");
-			// 	} else {
-			// 		dE("Error while getting the kernel reply.");
-			// 	}
-			// }
+			return audit_list;
 		}
 		else
 		{
@@ -933,12 +909,21 @@ static struct oscap_list *get_all_audit_rules(probe_ctx *ctx)
 	}
 	else
 	{
-		//TODO gestion d'erreur
+		int errnum = errno;
+		dE("Failed to get a handle for the audit system : %s", strerror(errnum));
+		SEXP_t *item = probe_item_create(
+			OVAL_DGAMI_AUDITDLINE, NULL,
+			"filter_key", OVAL_DATATYPE_STRING, "",
+			NULL);
+
+		probe_item_setstatus(item, SYSCHAR_STATUS_ERROR);
+		probe_item_add_msg(item, OVAL_MESSAGE_LEVEL_ERROR,
+						   "Failed to obtain a handle to the audit system : %s.", strerror(errnum));
+		probe_item_collect(ctx, item);
 	}
 
 	audit_close(audit_fd);
-
-	return audit_list;
+	return NULL;
 }
 
 int auditdline_probe_offline_mode_supported()
@@ -951,15 +936,57 @@ int auditdline_probe_main(probe_ctx *ctx, void *arg)
 
 	SEXP_t *probe_in = probe_ctx_getobject(ctx);
 	SEXP_t *key_filter = probe_obj_getent(probe_in, "filter_key", 1);
-	SEXP_t *key_filter_value = probe_ent_getval(key_filter);
-	char *key_filter_str = SEXP_string_cstr(key_filter_value);
+	bool isNil = probe_ent_getval(key_filter) == NULL;
 
-	get_all_audit_rules(ctx);
+	struct oscap_list *audit_list = get_all_audit_rules(ctx);
+
+	if (audit_list != NULL)
+	{
+		struct oscap_iterator *audit_list_iter = oscap_iterator_new(audit_list);
+		while (oscap_iterator_has_more(audit_list_iter))
+		{
+			struct audit_line *audit_line = oscap_iterator_next(audit_list_iter);
+			if (!isNil)
+			{
+				struct oscap_string_iterator *filter_key_iter = oscap_stringlist_get_strings(audit_line->filter_key);
+				while (oscap_string_iterator_has_more(filter_key_iter))
+				{
+					const char *filter_key = oscap_string_iterator_next(filter_key_iter);
+					SEXP_t *sexp_filter_key = SEXP_string_newf("%s", filter_key);
+					if (probe_entobj_cmp(key_filter, sexp_filter_key) == OVAL_RESULT_TRUE)
+					{
+						SEXP_t *item = probe_item_create(
+							OVAL_DGAMI_AUDITDLINE, NULL,
+							"filter_key", OVAL_DATATYPE_STRING, filter_key,
+							"auditline", OVAL_DATATYPE_STRING, oscap_string_get_cstr(audit_line->audit_line),
+							"line_number", OVAL_DATATYPE_INTEGER, audit_line->line_number,
+							NULL);
+						probe_item_setstatus(item, SYSCHAR_STATUS_EXISTS);
+						probe_item_collect(ctx, item);
+						SEXP_free(sexp_filter_key);
+						break;
+					}
+					SEXP_free(sexp_filter_key);
+				}
+				oscap_string_iterator_free(filter_key_iter);
+			}
+			else
+			{
+				SEXP_t *item = probe_item_create(
+					OVAL_DGAMI_AUDITDLINE, NULL,
+					"auditline", OVAL_DATATYPE_STRING, oscap_string_get_cstr(audit_line->audit_line),
+					"line_number", OVAL_DATATYPE_INTEGER, audit_line->line_number,
+					NULL);
+				probe_item_setstatus(item, SYSCHAR_STATUS_EXISTS);
+				probe_item_collect(ctx, item);
+			}
+		}
+		oscap_iterator_free(audit_list_iter);
+	}
 
 	// Cleanup of the ressources
-	free(key_filter_str);
-	SEXP_free(key_filter_value);
 	SEXP_free(key_filter);
+	oscap_list_free(audit_list, auditd_line_free);
 
 	return 0;
 }
