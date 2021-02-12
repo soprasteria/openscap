@@ -88,12 +88,13 @@ static int is_watch(const struct audit_rule_data *r)
 	return 0;
 }
 
-static int print_syscall(const struct audit_rule_data *r, unsigned int *sc)
+static int print_syscall(const struct audit_rule_data *r, unsigned int *sc, struct audit_line *audit_line)
 {
 	int count = 0;
 	int all = 1;
 	unsigned int i;
 	int machine = audit_detect_machine();
+	int syscall_buf_len = 0;
 
 	/* Rules on the following filters do not take a syscall */
 	if (((r->flags & AUDIT_FILTER_MASK) == AUDIT_FILTER_USER) ||
@@ -114,7 +115,11 @@ static int print_syscall(const struct audit_rule_data *r, unsigned int *sc)
 
 	if (all)
 	{
-		printf(" -S all");
+		syscall_buf_len = snprintf(NULL, 0, " -S all");
+		char *syscall_buf = malloc(syscall_buf_len + 1);
+		snprintf(syscall_buf, syscall_buf_len + 1, " -S all");
+		audit_line_push(audit_line, syscall_buf);
+		free(syscall_buf);
 		count = i;
 	}
 	else
@@ -132,11 +137,29 @@ static int print_syscall(const struct audit_rule_data *r, unsigned int *sc)
 				else
 					ptr = audit_syscall_to_name(i, machine);
 				if (!count)
-					printf(" -S ");
+				{
+					syscall_buf_len = snprintf(NULL, 0, " -S ");
+					char *syscall_buf = malloc(syscall_buf_len + 1);
+					snprintf(syscall_buf, syscall_buf_len + 1, " -S ");
+					audit_line_push(audit_line, syscall_buf);
+					free(syscall_buf);
+				}
 				if (ptr)
-					printf("%s%s", !count ? "" : ",", ptr);
+				{
+					syscall_buf_len = snprintf(NULL, 0, "%s%s", !count ? "" : ",", ptr);
+					char *syscall_buf = malloc(syscall_buf_len + 1);
+					snprintf(syscall_buf, syscall_buf_len + 1, "%s%s", !count ? "" : ",", ptr);
+					audit_line_push(audit_line, syscall_buf);
+					free(syscall_buf);
+				}
 				else
-					printf("%s%u", !count ? "" : ",", i);
+				{
+					syscall_buf_len = snprintf(NULL, 0, "%s%u", !count ? "" : ",", i);
+					char *syscall_buf = malloc(syscall_buf_len + 1);
+					snprintf(syscall_buf, syscall_buf_len + 1, "%s%u", !count ? "" : ",", i);
+					audit_line_push(audit_line, syscall_buf);
+					free(syscall_buf);
+				}
 				count++;
 				*sc = i;
 			}
@@ -144,137 +167,292 @@ static int print_syscall(const struct audit_rule_data *r, unsigned int *sc)
 	return count;
 }
 
-static void print_field_cmp(int value, int op)
+static void print_field_cmp(int value, int op, struct audit_line *audit_line)
 {
+	int cmp_buf_len = 0;
+	char *cmp_buf = NULL;
 	switch (value)
 	{
 	case AUDIT_COMPARE_UID_TO_OBJ_UID:
-		printf(" -C uid%sobj_uid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C uid%sobj_uid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C uid%sobj_uid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_GID_TO_OBJ_GID:
-		printf(" -C gid%sobj_gid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C gid%sobj_gid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C gid%sobj_gid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_EUID_TO_OBJ_UID:
-		printf(" -C euid%sobj_uid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C euid%sobj_uid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len, " -C euid%sobj_uid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_EGID_TO_OBJ_GID:
-		printf(" -C egid%sobj_gid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C egid%sobj_gid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C egid%sobj_gid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_AUID_TO_OBJ_UID:
-		printf(" -C auid%sobj_uid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C auid%sobj_uid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C auid%sobj_uid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_SUID_TO_OBJ_UID:
-		printf(" -C suid%sobj_uid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C suid%sobj_uid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C suid%sobj_uid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_SGID_TO_OBJ_GID:
-		printf(" -C sgid%sobj_gid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C sgid%sobj_gid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C sgid%sobj_gid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_FSUID_TO_OBJ_UID:
-		printf(" -C fsuid%sobj_uid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C fsuid%sobj_uid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C fsuid%sobj_uid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_FSGID_TO_OBJ_GID:
-		printf(" -C fsgid%sobj_gid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C fsgid%sobj_gid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C fsgid%sobj_gid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_UID_TO_AUID:
-		printf(" -C uid%sauid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C uid%sauid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C uid%sauid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_UID_TO_EUID:
-		printf(" -C uid%seuid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C uid%seuid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C uid%seuid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_UID_TO_FSUID:
-		printf(" -C uid%sfsuid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C uid%sfsuid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C uid%sfsuid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_UID_TO_SUID:
-		printf(" -C uid%ssuid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C uid%ssuid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C uid%ssuid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_AUID_TO_FSUID:
-		printf(" -C auid%sfsuid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C auid%sfsuid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C auid%sfsuid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_AUID_TO_SUID:
-		printf(" -C auid%ssuid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C auid%ssuid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C auid%ssuid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_AUID_TO_EUID:
-		printf(" -C auid%seuid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C auid%seuid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C auid%seuid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_EUID_TO_SUID:
-		printf(" -C euid%ssuid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C euid%ssuid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C euid%ssuid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_EUID_TO_FSUID:
-		printf(" -C euid%sfsuid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C euid%sfsuid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C euid%sfsuid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_SUID_TO_FSUID:
-		printf(" -C suid%sfsuid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C suid%sfsuid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C suid%sfsuid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_GID_TO_EGID:
-		printf(" -C gid%segid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C gid%segid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C gid%segid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_GID_TO_FSGID:
-		printf(" -C gid%sfsgid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C gid%sfsgid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len, " -C gid%sfsgid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_GID_TO_SGID:
-		printf(" -C gid%ssgid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C gid%ssgid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C gid%ssgid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_EGID_TO_FSGID:
-		printf(" -C egid%sfsgid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C egid%sfsgid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C egid%sfsgid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_EGID_TO_SGID:
-		printf(" -C egid%ssgid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C egid%ssgid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C egid%ssgid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	case AUDIT_COMPARE_SGID_TO_FSGID:
-		printf(" -C sgid%sfsgid",
-			   audit_operator_to_symbol(op));
+		cmp_buf_len = snprintf(NULL, 0, " -C sgid%sfsgid",
+							   audit_operator_to_symbol(op));
+		cmp_buf = malloc(cmp_buf_len + 1);
+		snprintf(cmp_buf, cmp_buf_len + 1, " -C sgid%sfsgid",
+				 audit_operator_to_symbol(op));
+		audit_line_push(audit_line, cmp_buf);
+		free(cmp_buf);
 		break;
 	}
 }
 
-static int print_arch(unsigned int value, int op)
+static int print_arch(unsigned int value, int op, struct audit_line *audit_line)
 {
+	size_t arch_buf_len = 0;
 	int machine;
 	_audit_elf = value;
 	machine = audit_elf_to_machine(_audit_elf);
 	if (machine < 0)
-		printf(" -F arch%s0x%X", audit_operator_to_symbol(op),
-			   (unsigned)value);
+	{
+
+		arch_buf_len = snprintf(NULL, 0, " -F arch%s0x%X", audit_operator_to_symbol(op),
+								(unsigned)value);
+		char *arch_buf = malloc(arch_buf_len + 1);
+		snprintf(arch_buf, arch_buf_len + 1, " -F arch%s0x%X", audit_operator_to_symbol(op),
+				 (unsigned)value);
+		audit_line_push(audit_line, arch_buf);
+		free(arch_buf);
+	}
 	else
 	{
 		if (interpret == 0)
 		{
 			if (__AUDIT_ARCH_64BIT & _audit_elf)
-				printf(" -F arch%sb64",
-					   audit_operator_to_symbol(op));
+			{
+				arch_buf_len = snprintf(NULL, 0, " -F arch%sb64",
+										audit_operator_to_symbol(op));
+				char *arch_buf = malloc(arch_buf_len + 1);
+				snprintf(arch_buf, arch_buf_len + 1, " -F arch%sb64",
+						 audit_operator_to_symbol(op));
+				audit_line_push(audit_line, arch_buf);
+				free(arch_buf);
+			}
 			else
-				printf(" -F arch%sb32",
-					   audit_operator_to_symbol(op));
+			{
+				arch_buf_len = snprintf(NULL, 0, " -F arch%sb32",
+										audit_operator_to_symbol(op));
+				char *arch_buf = malloc(arch_buf_len + 1);
+				snprintf(arch_buf, arch_buf_len + 1, " -F arch%sb32",
+						 audit_operator_to_symbol(op));
+				audit_line_push(audit_line, arch_buf);
+				free(arch_buf);
+			}
 		}
 		else
 		{
 			const char *ptr = audit_machine_to_name(machine);
-			printf(" -F arch%s%s", audit_operator_to_symbol(op),
-				   ptr);
+			arch_buf_len = snprintf(NULL, 0, " -F arch%s%s", audit_operator_to_symbol(op),
+									ptr);
+			char *arch_buf = malloc(arch_buf_len + 1);
+			snprintf(arch_buf, arch_buf_len + 1, " -F arch%s%s", audit_operator_to_symbol(op),
+					 ptr);
+			audit_line_push(audit_line, arch_buf);
+			free(arch_buf);
 		}
 	}
 	return machine;
@@ -313,11 +491,11 @@ struct audit_line *get_rule(const struct audit_rule_data *r)
 			if (field == AUDIT_ARCH)
 			{
 				int op = r->fieldflags[i] & AUDIT_OPERATORS;
-				mach = print_arch(r->values[i], op);
+				mach = print_arch(r->values[i], op, audit_line);
 			}
 		}
 		// And last do the syscalls
-		count = print_syscall(r, &sc);
+		count = print_syscall(r, &sc, audit_line);
 	}
 
 	// Now iterate over the fields
@@ -517,7 +695,7 @@ struct audit_line *get_rule(const struct audit_rule_data *r)
 			}
 			else if (field == AUDIT_FIELD_COMPARE)
 			{
-				print_field_cmp(r->values[i], op);
+				print_field_cmp(r->values[i], op, audit_line);
 			}
 			else if (field >= AUDIT_ARG0 && field <= AUDIT_ARG3)
 			{
