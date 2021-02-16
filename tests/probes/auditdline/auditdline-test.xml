@@ -1,4 +1,4 @@
-<ns0:oval_definitions xmlns:ns0="http://oval.mitre.org/XMLSchema/oval-definitions-5" xmlns:ns2="http://oval.mitre.org/XMLSchema/oval-common-5" xmlns:ns3="http://oval.mitre.org/XMLSchema/oval-definitions-5#independent" xmlns:ns4="http://oval.mitre.org/XMLSchema/oval-definitions-5#unix" xmlns:ns5="http://oval.mitre.org/XMLSchema/oval-definitions-5#linux" xmlns:ns6="http://oval.mitre.org/XMLSchema/oval-definitions-5#x-dgami" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://oval.mitre.org/XMLSchema/oval-common-5 oval-common-schema.xsd         http://oval.mitre.org/XMLSchema/oval-definitions-5 oval-definitions-schema.xsd         http://oval.mitre.org/XMLSchema/oval-definitions-5#independent independent-definitions-schema.xsd         http://oval.mitre.org/XMLSchema/oval-definitions-5#unix unix-definitions-schema.xsd         http://oval.mitre.org/XMLSchema/oval-definitions-5#linux linux-definitions-schema.xsd http://oval.mitre.org/XMLSchema/oval-definitions-5#x-dgami x-dga-mi-definitions-schema.xsd">
+<ns0:oval_definitions xmlns:ns0="http://oval.mitre.org/XMLSchema/oval-definitions-5" xmlns:ns2="http://oval.mitre.org/XMLSchema/oval-common-5" xmlns:ns3="http://oval.mitre.org/XMLSchema/oval-definitions-5#independent" xmlns:ns4="http://oval.mitre.org/XMLSchema/oval-definitions-5#unix" xmlns:ns5="http://oval.mitre.org/XMLSchema/oval-definitions-5#linux" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://oval.mitre.org/XMLSchema/oval-common-5 oval-common-schema.xsd         http://oval.mitre.org/XMLSchema/oval-definitions-5 oval-definitions-schema.xsd         http://oval.mitre.org/XMLSchema/oval-definitions-5#independent independent-definitions-schema.xsd         http://oval.mitre.org/XMLSchema/oval-definitions-5#unix unix-definitions-schema.xsd         http://oval.mitre.org/XMLSchema/oval-definitions-5#linux linux-definitions-schema.xsd">
   <ns0:generator>
     <ns2:product_name>human</ns2:product_name>
     <ns2:product_version>1.0</ns2:product_version>
@@ -15,18 +15,18 @@
         <ns0:description>This description in OVALs is mandatory, but the most important is to have description in XCCDF.</ns0:description>
       <reference ref_id="auditdline_get_all_rules" source="ssg" /></ns0:metadata>
       <ns0:criteria>
-        <ns0:criterion comment="Check file hash of /oval-test" test_ref="oval:ssg-auditdline_get_all_rules:tst:1" />
+        <ns0:criterion comment="Gather all the currnent rules on the system" test_ref="oval:ssg-auditdline_get_all_rules:tst:1" />
       </ns0:criteria>
     </ns0:definition>
   </ns0:definitions>
   <ns0:tests>
-    <ns6:auditdline_test check="all" comment="-" id="oval:ssg-auditdline_get_all_rules:tst:1" version="1">
-      <ns6:object object_ref="oval:ssg-audit_line:obj:1" />
-    </ns6:auditdline_test>
+    <ns5:auditdline_test check="all" comment="-" id="oval:ssg-auditdline_get_all_rules:tst:1" version="1">
+      <ns5:object object_ref="oval:ssg-audit_line:obj:1" />
+    </ns5:auditdline_test>
   </ns0:tests>
   <ns0:objects>
-    <ns6:auditdline_object id="oval:ssg-audit_line:obj:1" version="1">
-      <ns6:filter_key operation="pattern match">.*</ns6:filter_key>
-    </ns6:auditdline_object>
+    <ns5:auditdline_object id="oval:ssg-audit_line:obj:1" version="1">
+      <ns5:filter_key operation="pattern match">.*</ns5:filter_key>
+    </ns5:auditdline_object>
   </ns0:objects>
 </ns0:oval_definitions>
